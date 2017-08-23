@@ -34,7 +34,7 @@ import java.util.Date;
 /**
  * Created by Leo on 2017/8/21.
  * 在APP上唤起debug日志方法，点击事件，快速点击3下，然后慢速点击3下，关闭也是
- * 唤起log筛选器，在顶部200像素内，快速单击5下；
+ * 唤起log筛选器，在顶部200像素内，快速单击6下；
  */
 
 public class Logger extends FrameLayout implements Application.ActivityLifecycleCallbacks {
@@ -259,7 +259,7 @@ public class Logger extends FrameLayout implements Application.ActivityLifecycle
         if (mTvLog.getVisibility() == GONE) return;
         if (dis < 300 && y < 200) {
             mFilterClick++;
-            if (mFilterClick > 5) {
+            if (mFilterClick > 4) {
                 showFilterDialog();
                 mFilterClick = 0;
             }
@@ -320,7 +320,10 @@ public class Logger extends FrameLayout implements Application.ActivityLifecycle
         //文本编辑框
         final EditText editText = new EditText(mCurrentActivity);
         editText.setHint("筛选关键字");
-        editText.setText(mFilterText);
+        if (mFilterText != null) {
+            editText.setText(mFilterText);
+            editText.setSelection(mFilterText.length());
+        }
         //按钮
         Button button = new Button(mCurrentActivity);
         button.setText("确定");
