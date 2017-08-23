@@ -51,6 +51,7 @@ public class Logger extends FrameLayout implements Application.ActivityLifecycle
     private AlertDialog mFilterDialog;
     private String mFilterText;
     private int mFilterLevel;
+    private static final int LOG_SOUT = 8;
 
     public static void setTag(String tag) {
         Logger.tag = tag;
@@ -59,9 +60,6 @@ public class Logger extends FrameLayout implements Application.ActivityLifecycle
     private Logger(Context context) {
         super(context);
         tag = context.getApplicationInfo().packageName; //可以自定义
-        if (!debuggable) {
-            return;
-        }
         float v = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 5, getResources().getDisplayMetrics());
         mTvLog = new TextView(context);
         mTvLog.setTextSize(v);
@@ -71,8 +69,13 @@ public class Logger extends FrameLayout implements Application.ActivityLifecycle
         mTvLog.setVisibility(GONE);
     }
 
+    /**
+     * 在application 的 onCreate() 方法初始化
+     *
+     * @param application
+     */
     public static void init(Application application) {
-        if (me == null) {
+        if (debuggable && me == null) {
             synchronized (Logger.class) {
                 if (me == null) {
                     me = new Logger(application.getApplicationContext());
@@ -127,7 +130,7 @@ public class Logger extends FrameLayout implements Application.ActivityLifecycle
     }
 
     public static void s(String tag, String msg) {
-        me.print(0, tag, msg);
+        me.print(LOG_SOUT, tag, msg);
     }
 
     private void print(int type, String tag, String msg) {
@@ -151,7 +154,7 @@ public class Logger extends FrameLayout implements Application.ActivityLifecycle
             case Log.ERROR:
                 Log.e(tag, msg);
                 break;
-            case 0:
+            case LOG_SOUT:
                 System.out.println(tag + ":" + msg);
                 break;
         }
