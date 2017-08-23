@@ -9,6 +9,7 @@
     android:paddingLeft="@dimen/activity_horizontal_margin"
     android:paddingRight="@dimen/activity_horizontal_margin"
     android:paddingTop="@dimen/activity_vertical_margin"
+    android:background="@color/colorAccent"
     tools:context="cn.leo.loggerview.MainActivity">
 
     <TextView
@@ -18,17 +19,9 @@
         android:text="Hello World!"/>
 
     <Button
+        android:layout_below="@id/tv_test"
         android:id="@+id/btn_print_Log"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_below="@id/tv_test"
         android:text="print_log"/>
-
-    <Button
-        android:id="@+id/btn_next"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_below="@id/btn_print_Log"
-        android:text="open other Activity"
-        android:textAllCaps="false"/>
 </RelativeLayout>

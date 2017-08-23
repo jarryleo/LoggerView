@@ -1,5 +1,6 @@
 package cn.leo.loggerview;
 
+import android.content.Intent;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.view.View;
@@ -21,10 +22,16 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private void init() {
         Button button = (Button) findViewById(R.id.btn_print_Log);
         button.setOnClickListener(this);
+        findViewById(R.id.btn_next).setOnClickListener(this);
     }
 
     @Override
     public void onClick(View v) {
-        Logger.w("这是一条log日志，测试测试测试 这是一条log日志，测试测试测试" + mIndex++);
+        if (v.getId() == R.id.btn_next) {
+            finish();
+            startActivity(new Intent(this, TestActivity.class));
+        }
+        if (v.getId() == R.id.btn_print_Log)
+            Logger.w("这是一条log日志，测试测试测试 这是一条log日志，测试测试测试" + mIndex++);
     }
 }

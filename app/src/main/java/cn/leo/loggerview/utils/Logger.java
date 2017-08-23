@@ -9,13 +9,23 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.os.SystemClock;
+import android.support.annotation.NonNull;
+import android.support.v7.app.AlertDialog;
 import android.text.Html;
+import android.text.TextUtils;
 import android.util.Log;
 import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+import android.widget.Spinner;
 import android.widget.TextView;
 
 import java.text.SimpleDateFormat;
@@ -24,6 +34,7 @@ import java.util.Date;
 /**
  * Created by Leo on 2017/8/21.
  * 在APP上唤起debug日志方法，点击事件，快速点击3下，然后慢速点击3下，关闭也是
+ * 唤起log筛选器，在顶部200像素内，快速单击5下；
  */
 
 public class Logger extends FrameLayout implements Application.ActivityLifecycleCallbacks {
@@ -35,6 +46,11 @@ public class Logger extends FrameLayout implements Application.ActivityLifecycle
     private View mSrcView;
     private int mLongClick;
     private int mShortClick;
+    private int mFilterClick;
+    private Context mCurrentActivity;
+    private AlertDialog mFilterDialog;
+    private String mFilterText;
+    private int mFilterLevel;
 
     public static void setTag(String tag) {
         Logger.tag = tag;
@@ -115,8 +131,9 @@ public class Logger extends FrameLayout implements Application.ActivityLifecycle
     }
 
     private void print(int type, String tag, String msg) {
-        if (!debuggable || me == null) return;
+        if (!debuggable || me == null || type < mFilterLevel + 2) return;
         String str = "[" + getTime() + "]" + getLevel(type) + "/" + tag + ":" + msg;
+        if (!TextUtils.isEmpty(mFilterText) && !str.contains(mFilterText)) return;
         handler.obtainMessage(type, str).sendToTarget();
         switch (type) {
             case Log.VERBOSE:
@@ -168,6 +185,7 @@ public class Logger extends FrameLayout implements Application.ActivityLifecycle
 
     @Override
     public void onActivityResumed(Activity activity) {
+        mCurrentActivity = activity;
         if (debuggable) {
             ViewGroup decorView = (ViewGroup) activity.getWindow().getDecorView();
             mSrcView = decorView.getChildAt(0);
@@ -180,6 +198,7 @@ public class Logger extends FrameLayout implements Application.ActivityLifecycle
 
     @Override
     public void onActivityPaused(Activity activity) {
+        mCurrentActivity = null;
         ViewGroup decorView = (ViewGroup) activity.getWindow().getDecorView();
         me.removeView(mSrcView);
         me.removeView(mTvLog);
@@ -210,25 +229,43 @@ public class Logger extends FrameLayout implements Application.ActivityLifecycle
         if (action == MotionEvent.ACTION_DOWN) {
             long l = SystemClock.uptimeMillis();
             long dis = l - timestamp;
-            if (dis < 300 && mShortClick < 2) {
-                mShortClick++;
-            } else if (dis > 300 && dis < 2000 && mShortClick == 2) {
-                mLongClick++;
-                if (mLongClick == 3 && mShortClick == 2) {
-                    if (mTvLog.getVisibility() == GONE) {
-                        mTvLog.setVisibility(VISIBLE);
-                    } else {
-                        mTvLog.setVisibility(GONE);
-                    }
-                    clearClick();
-                }
-            } else {
-                clearClick();
-            }
+            checkSwitch(dis);
+            checkFilter(dis, ev.getY());
             timestamp = SystemClock.uptimeMillis();
         }
         return super.dispatchTouchEvent(ev);
 
+    }
+
+    private void checkSwitch(long dis) {
+        if (dis < 300 && mShortClick < 2) {
+            mShortClick++;
+        } else if (dis > 300 && dis < 2000 && mShortClick == 2) {
+            mLongClick++;
+            if (mLongClick == 3 && mShortClick == 2) {
+                if (mTvLog.getVisibility() == GONE) {
+                    mTvLog.setVisibility(VISIBLE);
+                } else {
+                    mTvLog.setVisibility(GONE);
+                }
+                clearClick();
+            }
+        } else {
+            clearClick();
+        }
+    }
+
+    private void checkFilter(long dis, float y) {
+        if (mTvLog.getVisibility() == GONE) return;
+        if (dis < 300 && y < 200) {
+            mFilterClick++;
+            if (mFilterClick > 5) {
+                showFilterDialog();
+                mFilterClick = 0;
+            }
+        } else {
+            mFilterClick = 0;
+        }
     }
 
     private void clearClick() {
@@ -248,4 +285,56 @@ public class Logger extends FrameLayout implements Application.ActivityLifecycle
             }
         }
     };
+
+    private void showFilterDialog() {
+        if (mCurrentActivity == null) return;
+        AlertDialog.Builder builder = new AlertDialog.Builder(mCurrentActivity);
+        builder.setView(initDialogView());
+        builder.setCancelable(false);
+        mFilterDialog = builder.show();
+    }
+
+    @NonNull
+    private View initDialogView() {
+        //容器
+        LinearLayout linearLayout = new LinearLayout(mCurrentActivity);
+        linearLayout.setOrientation(LinearLayout.VERTICAL);
+        linearLayout.setGravity(Gravity.CENTER_HORIZONTAL);
+        //下拉框
+        Spinner spinner = new Spinner(mCurrentActivity, Spinner.MODE_DROPDOWN);
+        spinner.setAdapter(new ArrayAdapter<String>(mCurrentActivity,
+                android.R.layout.simple_spinner_dropdown_item,
+                new String[]{"Verbose", "Debug", "Info", "Warn", "Error"}));
+        spinner.setSelection(mFilterLevel);
+        spinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                mFilterLevel = position;
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+
+            }
+        });
+        //文本编辑框
+        final EditText editText = new EditText(mCurrentActivity);
+        editText.setHint("筛选关键字");
+        editText.setText(mFilterText);
+        //按钮
+        Button button = new Button(mCurrentActivity);
+        button.setText("确定");
+        button.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                mFilterText = editText.getText().toString();
+                mFilterDialog.dismiss();
+            }
+        });
+        //添加到容器
+        linearLayout.addView(spinner);
+        linearLayout.addView(editText);
+        linearLayout.addView(button);
+        return linearLayout;
+    }
 }
