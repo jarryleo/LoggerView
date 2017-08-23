@@ -110,27 +110,27 @@ public class Logger extends FrameLayout implements Application.ActivityLifecycle
     }
 
     public static void v(String tag, String msg) {
-        me.print(Log.VERBOSE, tag, msg);
+        if (me != null) me.print(Log.VERBOSE, tag, msg);
     }
 
     public static void d(String tag, String msg) {
-        me.print(Log.DEBUG, tag, msg);
+        if (me != null) me.print(Log.DEBUG, tag, msg);
     }
 
     public static void i(String tag, String msg) {
-        me.print(Log.INFO, tag, msg);
+        if (me != null) me.print(Log.INFO, tag, msg);
     }
 
     public static void w(String tag, String msg) {
-        me.print(Log.WARN, tag, msg);
+        if (me != null) me.print(Log.WARN, tag, msg);
     }
 
     public static void e(String tag, String msg) {
-        me.print(Log.ERROR, tag, msg);
+        if (me != null) me.print(Log.ERROR, tag, msg);
     }
 
     public static void s(String tag, String msg) {
-        me.print(LOG_SOUT, tag, msg);
+        if (me != null) me.print(LOG_SOUT, tag, msg);
     }
 
     private void print(int type, String tag, String msg) {
