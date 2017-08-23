@@ -23,8 +23,6 @@ import java.util.Date;
 
 /**
  * Created by Leo on 2017/8/21.
- * 初始化方法：在application的onCreate()事件中写下行代码：
- * registerActivityLifecycleCallbacks(Logger.getLogger(getApplicationContext()));
  * 在APP上唤起debug日志方法，点击事件，快速点击3下，然后慢速点击3下，关闭也是
  */
 
@@ -57,15 +55,15 @@ public class Logger extends FrameLayout implements Application.ActivityLifecycle
         mTvLog.setVisibility(GONE);
     }
 
-    public static Logger getLogger(Context context) {
+    public static void init(Application application) {
         if (me == null) {
             synchronized (Logger.class) {
                 if (me == null) {
-                    me = new Logger(context);
+                    me = new Logger(application.getApplicationContext());
+                    application.registerActivityLifecycleCallbacks(me);
                 }
             }
         }
-        return me;
     }
 
     public static void v(String msg) {
@@ -149,7 +147,7 @@ public class Logger extends FrameLayout implements Application.ActivityLifecycle
 
     private void addText(int type, String text) {
         String[] level = new String[]{"#ffffff", "", "#ffffff", "#ffffff", "#00ff00", "#ffff00", "#ff0000"};
-        String str = String.format("<br> <font color=\"" + level[type] + "\">%s \r\n", text);
+        String str = String.format("<br> <font color=\"" + level[type] + "\">%s", text);
         mTvLog.append(Html.fromHtml(str));
     }
 

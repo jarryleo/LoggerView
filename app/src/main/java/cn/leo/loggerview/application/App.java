@@ -12,7 +12,7 @@ public class App extends Application {
     @Override
     public void onCreate() {
         super.onCreate();
-        registerActivityLifecycleCallbacks(Logger.getLogger(getApplicationContext()));
+        Logger.init(this);
     }
 
 }
