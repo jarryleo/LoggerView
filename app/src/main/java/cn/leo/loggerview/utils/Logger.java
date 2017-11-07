@@ -3,15 +3,21 @@ package cn.leo.loggerview.utils;
 import android.app.Activity;
 import android.app.Application;
 import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
+import android.os.Process;
 import android.os.SystemClock;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
+import android.support.v4.widget.ViewDragHelper;
 import android.support.v7.app.AlertDialog;
 import android.text.Html;
+import android.text.Spanned;
 import android.text.TextUtils;
 import android.util.Log;
 import android.util.TypedValue;
@@ -19,30 +25,41 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AbsListView;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.ListView;
+import android.widget.RelativeLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
+import android.widget.Toast;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
+
+import cn.leo.loggerview.TestActivity;
 
 /**
  * Created by Leo on 2017/8/21.
  * 在APP上唤起debug日志方法，点击事件，快速点击3下，然后慢速点击3下，关闭也是
- * 唤起log筛选器，在顶部200像素内，快速单击6下；
+ * 唤起log筛选器，在顶部200像素内，快速单击5下；
  */
 
-public class Logger extends FrameLayout implements Application.ActivityLifecycleCallbacks {
+public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandler, Application.ActivityLifecycleCallbacks {
     private static boolean debuggable = true; //正式环境(false)不打印日志，也不能唤起app的debug界面
     private static Logger me;
     private static String tag;
     private long timestamp = 0;
-    private TextView mTvLog;
     private View mSrcView;
     private int mLongClick;
     private int mShortClick;
@@ -52,21 +69,70 @@ public class Logger extends FrameLayout implements Application.ActivityLifecycle
     private String mFilterText;
     private int mFilterLevel;
     private static final int LOG_SOUT = 8;
+    private final Toast mToast;
+    private static Thread.UncaughtExceptionHandler mDefaultHandler;
+    private final LinearLayout mLogContainer;
+    private List<String> logList = new ArrayList<>();
+    private List<String> filterList = new ArrayList<>();
+    private final ArrayAdapter<String> mLogAdapter;
+    private final TextView mTvTitle;
+    private final ListView mLvLog;
+    private boolean autoScroll = true;
 
     public static void setTag(String tag) {
         Logger.tag = tag;
     }
 
-    private Logger(Context context) {
+    private Logger(final Context context) {
         super(context);
         tag = context.getApplicationInfo().packageName; //可以自定义
-        float v = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 5, getResources().getDisplayMetrics());
-        mTvLog = new TextView(context);
-        mTvLog.setTextSize(v);
-        mTvLog.setBackgroundColor(Color.argb(0x55, 0X00, 0x00, 0x00));
-        mTvLog.setTextColor(Color.WHITE);
-        mTvLog.setShadowLayer(1, 1, 1, Color.BLACK);
-        mTvLog.setVisibility(GONE);
+        final float v = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 4, getResources().getDisplayMetrics());
+        mToast = Toast.makeText(context, "", Toast.LENGTH_SHORT);
+        //日志容器
+        mLogContainer = new LinearLayout(context);
+        mLogContainer.setOrientation(LinearLayout.VERTICAL);
+        mLogContainer.setBackgroundColor(Color.argb(0x33, 0X00, 0x00, 0x00));
+        int widthPixels = context.getResources().getDisplayMetrics().widthPixels;
+        int heightPixels = context.getResources().getDisplayMetrics().heightPixels;
+        FrameLayout.LayoutParams layoutParams = new LayoutParams(widthPixels / 2, heightPixels / 3, Gravity.CENTER);
+        mLogContainer.setLayoutParams(layoutParams);
+        mLogContainer.setVisibility(GONE);
+        //小窗口标题
+        mTvTitle = new TextView(context);
+        mTvTitle.setTextSize(v * 1.5f);
+        mTvTitle.setText("Logcat(此处可拖动)");
+        mTvTitle.setTextColor(Color.WHITE);
+        mTvTitle.setBackgroundColor(Color.argb(0x55, 0X00, 0x00, 0x00));
+        mLogContainer.addView(mTvTitle);
+        //日志列表
+        mLvLog = new ListView(context);
+        mLogContainer.addView(mLvLog);
+        mLogAdapter = new ArrayAdapter<String>(context, android.R.layout.simple_list_item_1, filterList) {
+            @NonNull
+            @Override
+            public View getView(int position, @Nullable View convertView, @NonNull ViewGroup parent) {
+                if (convertView == null) {
+                    convertView = new TextView(parent.getContext());
+                }
+                TextView textView = (TextView) convertView;
+                textView.setTextSize(v);
+                textView.setText(Html.fromHtml(filterList.get(position)));
+                textView.setShadowLayer(1, 1, 1, Color.BLACK);
+                return textView;
+            }
+        };
+        mLvLog.setAdapter(mLogAdapter);
+        mLvLog.setOnScrollListener(new AbsListView.OnScrollListener() {
+            @Override
+            public void onScrollStateChanged(AbsListView view, int scrollState) {
+
+            }
+
+            @Override
+            public void onScroll(AbsListView view, int firstVisibleItem, int visibleItemCount, int totalItemCount) {
+                autoScroll = firstVisibleItem + visibleItemCount == totalItemCount;
+            }
+        });
     }
 
     /**
@@ -80,6 +146,9 @@ public class Logger extends FrameLayout implements Application.ActivityLifecycle
                 if (me == null) {
                     me = new Logger(application.getApplicationContext());
                     application.registerActivityLifecycleCallbacks(me);
+                    //获取系统默认异常处理器
+                    mDefaultHandler = Thread.getDefaultUncaughtExceptionHandler();
+                    Thread.setDefaultUncaughtExceptionHandler(me);//线程异常处理设置为自己
                 }
             }
         }
@@ -167,8 +236,31 @@ public class Logger extends FrameLayout implements Application.ActivityLifecycle
 
     private void addText(int type, String text) {
         String[] level = new String[]{"#ffffff", "", "#ffffff", "#ffffff", "#00ff00", "#ffff00", "#ff0000"};
-        String str = String.format("<br> <font color=\"" + level[type] + "\">%s", text);
-        mTvLog.append(Html.fromHtml(str));
+        String str = String.format("<font color=\"" + level[type] + "\">%s</font>", text);
+        logList.add(str);
+        if (logList.size() > 100) logList.remove(0);
+        refreshList();
+    }
+
+    private void refreshList() {
+        filterList.clear();//清空过滤列表
+        for (int i = 0; i < logList.size(); i++) {
+            String s = logList.get(i);
+            int l = 2;
+            for (int j = 2; j < 7; j++) {
+                String level1 = getLevel(j);
+                if (s.contains("]" + level1 + "/")) {
+                    l = j;
+                    break;
+                }
+            }
+            if (l >= mFilterLevel + 2 && (mFilterText == null || s.contains(mFilterText))) {
+                filterList.add(s);
+            }
+        }
+        mLogAdapter.notifyDataSetChanged();
+        if (autoScroll)
+            mLvLog.smoothScrollToPosition(logList.size());
     }
 
     private String getTime() {
@@ -193,8 +285,8 @@ public class Logger extends FrameLayout implements Application.ActivityLifecycle
             ViewGroup decorView = (ViewGroup) activity.getWindow().getDecorView();
             mSrcView = decorView.getChildAt(0);
             decorView.removeView(mSrcView);
-            me.addView(mSrcView);
-            me.addView(mTvLog);
+            me.addView(mSrcView, 0);
+            me.addView(mLogContainer, 1);
             decorView.addView(me);
         }
     }
@@ -204,10 +296,10 @@ public class Logger extends FrameLayout implements Application.ActivityLifecycle
         mCurrentActivity = null;
         ViewGroup decorView = (ViewGroup) activity.getWindow().getDecorView();
         me.removeView(mSrcView);
-        me.removeView(mTvLog);
+        me.removeView(mLogContainer);
         decorView.removeView(me);
         if (mSrcView != null) {
-            decorView.addView(mSrcView);
+            decorView.addView(mSrcView, 0);
         }
     }
 
@@ -226,6 +318,48 @@ public class Logger extends FrameLayout implements Application.ActivityLifecycle
 
     }
 
+    private void resetParams(int x, int y) {
+        MarginLayoutParams margin = new MarginLayoutParams(mLogContainer.getLayoutParams());
+        margin.setMargins(x, y, x + margin.width, y + margin.height);
+        FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(margin);
+        mLogContainer.setLayoutParams(layoutParams);
+    }
+
+    final ViewDragHelper dragHelper = ViewDragHelper.create(this, new ViewDragHelper.Callback() {
+
+        @Override
+        public boolean tryCaptureView(View child, int pointerId) {
+            e(child.toString());
+            return child == mLogContainer;
+        }
+
+        @Override
+        public int clampViewPositionHorizontal(View child, int left, int dx) {
+            return left;
+        }
+
+        @Override
+        public int clampViewPositionVertical(View child, int top, int dy) {
+            return top;
+        }
+
+        @Override
+        public void onViewPositionChanged(View changedView, int left, int top, int dx, int dy) {
+            resetParams(left, top);
+        }
+    });
+
+    @Override
+    public boolean onInterceptTouchEvent(MotionEvent ev) {
+        return dragHelper.shouldInterceptTouchEvent(ev);
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        dragHelper.processTouchEvent(event);
+        return true;
+    }
+
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
         int action = ev.getAction();
@@ -237,32 +371,45 @@ public class Logger extends FrameLayout implements Application.ActivityLifecycle
             timestamp = SystemClock.uptimeMillis();
         }
         return super.dispatchTouchEvent(ev);
-
     }
 
     private void checkSwitch(long dis) {
-        if (dis < 300 && mShortClick < 2) {
+        if (dis < 200 && mShortClick < 2) {
             mShortClick++;
-        } else if (dis > 300 && dis < 2000 && mShortClick == 2) {
+            if (mShortClick == 2 && mLogContainer.getVisibility() == GONE) {
+                mToast.setText("即将开启日志，请2秒内慢速点击3下开启日志窗口");
+                mToast.show();
+            }
+        } else if (dis > 200 && dis < 2000 && mShortClick == 2) {
             mLongClick++;
+            if (mLogContainer.getVisibility() == GONE) {
+                mToast.setText("还差" + (3 - mLongClick) + "次点击开启日志");
+                mToast.show();
+            }
             if (mLongClick == 3 && mShortClick == 2) {
-                if (mTvLog.getVisibility() == GONE) {
-                    mTvLog.setVisibility(VISIBLE);
+                if (mLogContainer.getVisibility() == GONE) {
+                    mLogContainer.setVisibility(VISIBLE);
+                    mToast.setText("顶部快速点击5下开启过滤器,重复开启指令即可关闭日志");
+                    mToast.show();
                 } else {
-                    mTvLog.setVisibility(GONE);
+                    mLogContainer.setVisibility(GONE);
                 }
                 clearClick();
             }
         } else {
+            if (mShortClick >= 2 && mLogContainer.getVisibility() == GONE) {
+                mToast.setText("开启指令失效，请重新快速点击3下");
+                mToast.show();
+            }
             clearClick();
         }
     }
 
     private void checkFilter(long dis, float y) {
-        if (mTvLog.getVisibility() == GONE) return;
+        if (mLogContainer.getVisibility() == GONE) return;
         if (dis < 300 && y < 200) {
             mFilterClick++;
-            if (mFilterClick > 4) {
+            if (mFilterClick > 3) {
                 showFilterDialog();
                 mFilterClick = 0;
             }
@@ -281,17 +428,13 @@ public class Logger extends FrameLayout implements Application.ActivityLifecycle
         public void handleMessage(Message msg) {
             String text = (String) msg.obj;
             addText(msg.what, text);
-            int offset = (mTvLog.getLineCount() + 1) * mTvLog.getLineHeight();
-            if (offset > mTvLog.getHeight()) {
-                mTvLog.setText("");
-                addText(msg.what, text);
-            }
         }
     };
 
     private void showFilterDialog() {
         if (mCurrentActivity == null) return;
         AlertDialog.Builder builder = new AlertDialog.Builder(mCurrentActivity);
+        builder.setTitle("日志过滤器");
         builder.setView(initDialogView());
         builder.setCancelable(false);
         mFilterDialog = builder.show();
@@ -335,6 +478,7 @@ public class Logger extends FrameLayout implements Application.ActivityLifecycle
             public void onClick(View v) {
                 mFilterText = editText.getText().toString();
                 mFilterDialog.dismiss();
+                refreshList();
             }
         });
         //添加到容器
@@ -342,5 +486,66 @@ public class Logger extends FrameLayout implements Application.ActivityLifecycle
         linearLayout.addView(editText);
         linearLayout.addView(button);
         return linearLayout;
+    }
+
+    /**
+     * 捕获崩溃信息
+     *
+     * @param t
+     * @param e
+     */
+    @Override
+    public void uncaughtException(Thread t, Throwable e) {
+        // 打印异常信息
+        e.printStackTrace();
+        // 我们没有处理异常 并且默认异常处理不为空 则交给系统处理
+        if (!handleException(e) && mDefaultHandler != null) {
+            // 系统处理  
+            mDefaultHandler.uncaughtException(t, e);
+        }
+    }
+
+    /*自己处理崩溃事件*/
+    private boolean handleException(final Throwable ex) {
+        if (ex == null) {
+            return false;
+        }
+        new Thread() {
+            @Override
+            public void run() {
+                Looper.prepare();
+                Toast.makeText(mCurrentActivity, "APP Crash", Toast.LENGTH_LONG)
+                        .show();
+                //e(ex.toString());
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                PrintStream printStream = new PrintStream(baos);
+                ex.printStackTrace(printStream);
+                String s = baos.toString();
+                String[] split = s.split("\t");
+                StringBuilder sb = new StringBuilder();
+                for (int i = 0; i < split.length; i++) {
+                    String s1 = split[i];
+                    if ((!s1.contains("android.") && !s1.contains("java."))
+                            && s1.contains("at") && i > 0) {
+                        s1 = String.format("<br> <font color=\"#ff0000\">%s</font>", s1);
+                    }
+                    sb.append(s1).append("\t ");
+                }
+                Spanned spanned = Html.fromHtml(sb.toString());
+                AlertDialog.Builder builder = new AlertDialog.Builder(mCurrentActivity);
+                builder.setTitle("App Crash,Log:");
+                builder.setMessage(spanned);
+                builder.setPositiveButton("关闭app", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        Process.killProcess(Process.myPid());
+                    }
+                });
+                builder.setCancelable(false);
+                builder.show();
+                Looper.loop();
+            }
+        }.start();
+        return true;
     }
 }

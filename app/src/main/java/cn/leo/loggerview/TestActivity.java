@@ -6,6 +6,7 @@ import android.view.View;
 import android.widget.Button;
 
 import cn.leo.loggerview.utils.Logger;
+import cn.leo.loggerview.utils.ToastUtilK;
 
 public class TestActivity extends AppCompatActivity implements View.OnClickListener {
 
@@ -26,5 +27,12 @@ public class TestActivity extends AppCompatActivity implements View.OnClickListe
     @Override
     public void onClick(View v) {
         Logger.w("这是一条log日志，测试测试测试 这是一条log日志，测试测试测试" + mIndex++);
+        new Thread() { //子线程弹吐司测试
+            @Override
+            public void run() {
+                ToastUtilK.INSTANCE.show(TestActivity.this, "测试");
+            }
+        }.start();
+        throw new NumberFormatException("测试异常");
     }
 }

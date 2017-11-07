@@ -12,6 +12,9 @@ import static org.junit.Assert.*;
 public class ExampleUnitTest {
     @Test
     public void addition_isCorrect() throws Exception {
-        assertEquals(4, 2 + 2);
+        //assertEquals(4, 2 + 2);
+        String s = "at android.os.Handler";
+        boolean contains = s.contains("android.");
+        assertEquals(!contains, false);
     }
 }

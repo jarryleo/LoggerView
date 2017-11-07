@@ -8,9 +8,8 @@ import android.os.Message;
 import android.widget.Toast;
 
 public class ToastUtil {
+    private static Handler handler = new Handler(Looper.getMainLooper());
     private static Toast toast;
-    private static Context mContext;
-    private static String mText;
 
     /**
      * 强大的吐司，能够连续弹的吐司并且能在子线程弹吐司
@@ -18,29 +17,20 @@ public class ToastUtil {
      * @param context
      * @param text
      */
-    public static void showToast(Context context, String text) {
-        mText = text;
-        if (toast == null) {
-            synchronized (ToastUtil.class) {
-                if (toast == null) {
-                    mContext = context.getApplicationContext();
-                    toast = Toast.makeText(mContext, text, Toast.LENGTH_SHORT);
+    public static void showToast(final Context context, final String text) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {//线程切换
+            handler.post(new Runnable() {
+                @Override
+                public void run() {
+                    showToast(context, text);
                 }
-            }
-        }
-        if (Looper.myLooper() != Looper.getMainLooper()) {
-            handler.obtainMessage().sendToTarget();
+            });
             return;
         }
-        toast.setText(mText);
-        toast.show();
-    }
-
-    private static Handler handler = new Handler(Looper.getMainLooper()) {
-        @Override
-        public void handleMessage(Message msg) {
-            showToast(mContext, mText);
+        if (toast == null) {//并不需要加锁双重校验，很少多个线程同时弹吐司
+            toast = Toast.makeText(context.getApplicationContext(), text, Toast.LENGTH_SHORT);
         }
-    };
-
+        toast.setText(text);
+        toast.show();//同一个吐司对象不会出现一个接一个弹
+    }
 }

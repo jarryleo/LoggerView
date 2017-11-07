@@ -6,6 +6,9 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import cn.leo.loggerview.utils.Logger;
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
@@ -28,10 +31,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     @Override
     public void onClick(View v) {
         if (v.getId() == R.id.btn_next) {
-            finish();
             startActivity(new Intent(this, TestActivity.class));
         }
         if (v.getId() == R.id.btn_print_Log)
             Logger.w("这是一条log日志，测试测试测试 这是一条log日志，测试测试测试" + mIndex++);
+
+        List<String> list = new ArrayList<>(10);
     }
 }
