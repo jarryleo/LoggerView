@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.app.Application;
 import android.content.Context;
 import android.content.DialogInterface;
-import android.content.Intent;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
@@ -33,7 +32,6 @@ import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ListView;
-import android.widget.RelativeLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -44,10 +42,6 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.Timer;
-import java.util.TimerTask;
-
-import cn.leo.loggerview.TestActivity;
 
 /**
  * Created by Leo on 2017/8/21.
@@ -72,12 +66,12 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
     private final Toast mToast;
     private static Thread.UncaughtExceptionHandler mDefaultHandler;
     private final LinearLayout mLogContainer;
-    private List<String> logList = new ArrayList<>();
-    private List<String> filterList = new ArrayList<>();
+    private List<String> mLogList = new ArrayList<>();
+    private List<String> mFilterList = new ArrayList<>();
     private final ArrayAdapter<String> mLogAdapter;
     private final TextView mTvTitle;
     private final ListView mLvLog;
-    private boolean autoScroll = true;
+    private boolean mAutoScroll = true;
 
     public static void setTag(String tag) {
         Logger.tag = tag;
@@ -105,9 +99,16 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
         mTvTitle.setBackgroundColor(Color.argb(0x55, 0X00, 0x00, 0x00));
         mLogContainer.addView(mTvTitle);
         //日志列表
-        mLvLog = new ListView(context);
+        mLvLog = new ListView(context) {
+            @Override
+            public boolean onTouchEvent(MotionEvent ev) {
+                getParent().requestDisallowInterceptTouchEvent(true);
+                return super.onTouchEvent(ev);
+            }
+        };
+        mLvLog.setFastScrollEnabled(true);
         mLogContainer.addView(mLvLog);
-        mLogAdapter = new ArrayAdapter<String>(context, android.R.layout.simple_list_item_1, filterList) {
+        mLogAdapter = new ArrayAdapter<String>(context, android.R.layout.simple_list_item_1, mFilterList) {
             @NonNull
             @Override
             public View getView(int position, @Nullable View convertView, @NonNull ViewGroup parent) {
@@ -116,7 +117,7 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
                 }
                 TextView textView = (TextView) convertView;
                 textView.setTextSize(v);
-                textView.setText(Html.fromHtml(filterList.get(position)));
+                textView.setText(Html.fromHtml(mFilterList.get(position)));
                 textView.setShadowLayer(1, 1, 1, Color.BLACK);
                 return textView;
             }
@@ -130,7 +131,18 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
 
             @Override
             public void onScroll(AbsListView view, int firstVisibleItem, int visibleItemCount, int totalItemCount) {
-                autoScroll = firstVisibleItem + visibleItemCount == totalItemCount;
+                mAutoScroll = firstVisibleItem + visibleItemCount == totalItemCount;
+            }
+        });
+        mLvLog.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                AlertDialog.Builder builder = new AlertDialog.Builder(mCurrentActivity);
+                String message = mFilterList.get(position);
+                message = message.replace("FFFFFF", "000000");
+                builder.setMessage(Html.fromHtml(message));
+                builder.setPositiveButton("确定", null);
+                builder.show();
             }
         });
     }
@@ -234,18 +246,24 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
         return level[type];
     }
 
+    private String getTime() {
+        String time = new SimpleDateFormat("MM-dd HH:mm:ss.SSS").format(new Date());
+        return time;
+    }
+
     private void addText(int type, String text) {
-        String[] level = new String[]{"#ffffff", "", "#ffffff", "#ffffff", "#00ff00", "#ffff00", "#ff0000"};
+        String[] level = new String[]{"#FFFFFF", "", "#FFFFFF", "#2FB1FE", "#00ff00", "#EFC429", "#FF0000"};
         String str = String.format("<font color=\"" + level[type] + "\">%s</font>", text);
-        logList.add(str);
-        if (logList.size() > 100) logList.remove(0);
+        mLogList.add(str);
+        while (mLogList.size() > 100) mLogList.remove(0);
         refreshList();
     }
 
+    /*刷新日志列表*/
     private void refreshList() {
-        filterList.clear();//清空过滤列表
-        for (int i = 0; i < logList.size(); i++) {
-            String s = logList.get(i);
+        mFilterList.clear();//清空过滤列表
+        for (int i = 0; i < mLogList.size(); i++) {
+            String s = mLogList.get(i);
             int l = 2;
             for (int j = 2; j < 7; j++) {
                 String level1 = getLevel(j);
@@ -255,17 +273,12 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
                 }
             }
             if (l >= mFilterLevel + 2 && (mFilterText == null || s.contains(mFilterText))) {
-                filterList.add(s);
+                mFilterList.add(s);
             }
         }
         mLogAdapter.notifyDataSetChanged();
-        if (autoScroll)
-            mLvLog.smoothScrollToPosition(logList.size());
-    }
-
-    private String getTime() {
-        String time = new SimpleDateFormat("MM-dd HH:mm:ss.SSS").format(new Date());
-        return time;
+        if (mAutoScroll)
+            mLvLog.smoothScrollToPosition(mLogList.size());
     }
 
     @Override
@@ -318,18 +331,10 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
 
     }
 
-    private void resetParams(int x, int y) {
-        MarginLayoutParams margin = new MarginLayoutParams(mLogContainer.getLayoutParams());
-        margin.setMargins(x, y, x + margin.width, y + margin.height);
-        FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(margin);
-        mLogContainer.setLayoutParams(layoutParams);
-    }
-
     final ViewDragHelper dragHelper = ViewDragHelper.create(this, new ViewDragHelper.Callback() {
 
         @Override
         public boolean tryCaptureView(View child, int pointerId) {
-            e(child.toString());
             return child == mLogContainer;
         }
 
@@ -347,7 +352,25 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
         public void onViewPositionChanged(View changedView, int left, int top, int dx, int dy) {
             resetParams(left, top);
         }
+
+        @Override
+        public int getViewHorizontalDragRange(View child) {
+            return getMeasuredWidth() - child.getMeasuredWidth();
+        }
+
+        @Override
+        public int getViewVerticalDragRange(View child) {
+            return getMeasuredHeight() - child.getMeasuredHeight();
+        }
+
     });
+
+    private void resetParams(int x, int y) {
+        MarginLayoutParams margin = new MarginLayoutParams(mLogContainer.getLayoutParams());
+        margin.setMargins(x, y, x + margin.width, y + margin.height);
+        FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(margin);
+        mLogContainer.setLayoutParams(layoutParams);
+    }
 
     @Override
     public boolean onInterceptTouchEvent(MotionEvent ev) {
@@ -389,7 +412,7 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
             if (mLongClick == 3 && mShortClick == 2) {
                 if (mLogContainer.getVisibility() == GONE) {
                     mLogContainer.setVisibility(VISIBLE);
-                    mToast.setText("顶部快速点击5下开启过滤器,重复开启指令即可关闭日志");
+                    mToast.setText("顶部快速点击5下可以开启过滤器,重复开启指令即可关闭日志");
                     mToast.show();
                 } else {
                     mLogContainer.setVisibility(GONE);

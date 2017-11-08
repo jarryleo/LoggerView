@@ -33,9 +33,12 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         if (v.getId() == R.id.btn_next) {
             startActivity(new Intent(this, TestActivity.class));
         }
-        if (v.getId() == R.id.btn_print_Log)
+        if (v.getId() == R.id.btn_print_Log) {
             Logger.w("这是一条log日志，测试测试测试 这是一条log日志，测试测试测试" + mIndex++);
-
-        List<String> list = new ArrayList<>(10);
+            Logger.v("这是一条log日志，测试测试测试 这是一条log日志，测试测试测试" + mIndex++);
+            Logger.d("这是一条log日志，测试测试测试 这是一条log日志，测试测试测试" + mIndex++);
+            Logger.i("这是一条log日志，测试测试测试 这是一条log日志，测试测试测试" + mIndex++);
+            Logger.e("这是一条log日志，测试测试测试 这是一条log日志，测试测试测试" + mIndex++);
+        }
     }
 }
