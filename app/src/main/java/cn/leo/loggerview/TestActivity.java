@@ -33,6 +33,6 @@ public class TestActivity extends AppCompatActivity implements View.OnClickListe
                 ToastUtilK.INSTANCE.show(TestActivity.this, "测试");
             }
         }.start();
-        throw new NumberFormatException("测试异常");
+        throw new NumberFormatException("测试崩溃异常");
     }
 }

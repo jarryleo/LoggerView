@@ -97,6 +97,12 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
         mTvTitle.setText("Logcat(此处可拖动)");
         mTvTitle.setTextColor(Color.WHITE);
         mTvTitle.setBackgroundColor(Color.argb(0x55, 0X00, 0x00, 0x00));
+        mTvTitle.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showFilterDialog();
+            }
+        });
         mLogContainer.addView(mTvTitle);
         //日志列表
         mLvLog = new ListView(context) {
@@ -142,6 +148,13 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
                 message = message.replace("FFFFFF", "000000");
                 builder.setMessage(Html.fromHtml(message));
                 builder.setPositiveButton("确定", null);
+                builder.setNegativeButton("清空日志", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        mLogList.clear();
+                        refreshList();
+                    }
+                });
                 builder.show();
             }
         });
