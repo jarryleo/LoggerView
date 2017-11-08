@@ -73,8 +73,9 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
     private final ListView mLvLog;
     private boolean mAutoScroll = true;
 
-    public static void setTag(String tag) {
+    public static Logger setTag(String tag) {
         Logger.tag = tag;
+        return me;
     }
 
     private Logger(final Context context) {
