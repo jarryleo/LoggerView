@@ -1,5 +1,6 @@
 # LoggerView
 # 可以在APP上查看log日志的工具类
+### 使用方法，把Logger.java文件拷贝到你项目的工具包下面即可
 初始化方法：
 在application 的 onCreate() 方法初始化
 ```
