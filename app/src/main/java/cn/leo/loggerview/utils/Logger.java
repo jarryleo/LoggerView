@@ -73,9 +73,8 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
     private final ListView mLvLog;
     private boolean mAutoScroll = true;
 
-    public static Logger setTag(String tag) {
+    public static void setTag(String tag) {
         Logger.tag = tag;
-        return me;
     }
 
     private Logger(final Context context) {
@@ -89,7 +88,7 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
         mLogContainer.setBackgroundColor(Color.argb(0x33, 0X00, 0x00, 0x00));
         int widthPixels = context.getResources().getDisplayMetrics().widthPixels;
         int heightPixels = context.getResources().getDisplayMetrics().heightPixels;
-        FrameLayout.LayoutParams layoutParams = new LayoutParams(widthPixels / 2, heightPixels / 3, Gravity.CENTER);
+        LayoutParams layoutParams = new LayoutParams(widthPixels / 2, heightPixels / 3, Gravity.CENTER);
         mLogContainer.setLayoutParams(layoutParams);
         mLogContainer.setVisibility(GONE);
         //小窗口标题
@@ -382,7 +381,7 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
     private void resetParams(int x, int y) {
         MarginLayoutParams margin = new MarginLayoutParams(mLogContainer.getLayoutParams());
         margin.setMargins(x, y, x + margin.width, y + margin.height);
-        FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(margin);
+        LayoutParams layoutParams = new LayoutParams(margin);
         mLogContainer.setLayoutParams(layoutParams);
     }
 
@@ -414,20 +413,20 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
         if (dis < 200 && mShortClick < 2) {
             mShortClick++;
             if (mShortClick == 2 && mLogContainer.getVisibility() == GONE) {
-                mToast.setText("即将开启日志，请2秒内慢速点击3下开启日志窗口");
-                mToast.show();
+                //mToast.setText("即将开启日志，请2秒内慢速点击3下开启日志窗口");
+                //mToast.show();
             }
         } else if (dis > 200 && dis < 2000 && mShortClick == 2) {
             mLongClick++;
             if (mLogContainer.getVisibility() == GONE) {
-                mToast.setText("还差" + (3 - mLongClick) + "次点击开启日志");
-                mToast.show();
+                //mToast.setText("还差" + (3 - mLongClick) + "次点击开启日志");
+                //mToast.show();
             }
             if (mLongClick == 3 && mShortClick == 2) {
                 if (mLogContainer.getVisibility() == GONE) {
                     mLogContainer.setVisibility(VISIBLE);
-                    mToast.setText("顶部快速点击5下可以开启过滤器,重复开启指令即可关闭日志");
-                    mToast.show();
+                    //mToast.setText("顶部快速点击5下可以开启过滤器,重复开启指令即可关闭日志");
+                    //mToast.show();
                 } else {
                     mLogContainer.setVisibility(GONE);
                 }
@@ -435,8 +434,8 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
             }
         } else {
             if (mShortClick >= 2 && mLogContainer.getVisibility() == GONE) {
-                mToast.setText("开启指令失效，请重新快速点击3下");
-                mToast.show();
+                //mToast.setText("开启指令失效，请重新快速点击3下");
+                //mToast.show();
             }
             clearClick();
         }
@@ -536,7 +535,8 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
         // 打印异常信息
         e.printStackTrace();
         // 我们没有处理异常 并且默认异常处理不为空 则交给系统处理
-        if (!handleException(e) && mDefaultHandler != null) {
+        // 有个bug在activity启动时崩溃无法捕捉异常，只能交给系统处理
+        if (mCurrentActivity == null || (!handleException(e) && mDefaultHandler != null)) {
             // 系统处理  
             mDefaultHandler.uncaughtException(t, e);
         }
@@ -551,9 +551,6 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
             @Override
             public void run() {
                 Looper.prepare();
-                Toast.makeText(mCurrentActivity, "APP Crash", Toast.LENGTH_LONG)
-                        .show();
-                //e(ex.toString());
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 PrintStream printStream = new PrintStream(baos);
                 ex.printStackTrace(printStream);
@@ -568,6 +565,8 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
                     }
                     sb.append(s1).append("\t ");
                 }
+                Toast.makeText(mCurrentActivity, "APP 崩溃", Toast.LENGTH_LONG)
+                        .show();
                 Spanned spanned = Html.fromHtml(sb.toString());
                 AlertDialog.Builder builder = new AlertDialog.Builder(mCurrentActivity);
                 builder.setTitle("App Crash,Log:");
