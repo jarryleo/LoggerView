@@ -58,19 +58,19 @@ import java.util.List;
 
 public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandler, Application.ActivityLifecycleCallbacks {
     private static boolean debuggable = true; //正式环境(false)不打印日志，也不能唤起app的debug界面
+    private static final int LOG_SOUT = 8;
     private static Logger me;
     private static String tag;
     private final Context mContext;
     private long timestamp = 0;
-    private View mSrcView;
     private int mLongClick;
     private int mShortClick;
     private int mFilterClick;
+    private View mSrcView;
     private Context mCurrentActivity;
     private AlertDialog mFilterDialog;
     private String mFilterText;
     private int mFilterLevel;
-    private static final int LOG_SOUT = 8;
     private final Toast mToast;
     private static Thread.UncaughtExceptionHandler mDefaultHandler;
     private final LinearLayout mLogContainer;
@@ -81,8 +81,9 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
     private final ListView mLvLog;
     private boolean mAutoScroll = true;
 
-    public static void setTag(String tag) {
+    public static Logger setTag(String tag) {
         Logger.tag = tag;
+        return me;
     }
 
     private Logger(final Context context) {
