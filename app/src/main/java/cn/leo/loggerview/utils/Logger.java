@@ -4,7 +4,9 @@ import android.app.Activity;
 import android.app.Application;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.graphics.Color;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -37,7 +39,11 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.io.PrintStream;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -53,6 +59,7 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
     private static boolean debuggable = true; //正式环境(false)不打印日志，也不能唤起app的debug界面
     private static Logger me;
     private static String tag;
+    private final Context mContext;
     private long timestamp = 0;
     private View mSrcView;
     private int mLongClick;
@@ -79,6 +86,7 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
 
     private Logger(final Context context) {
         super(context);
+        mContext = context;
         tag = context.getApplicationInfo().packageName; //可以自定义
         final float v = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 4, getResources().getDisplayMetrics());
         mToast = Toast.makeText(context, "", Toast.LENGTH_SHORT);
@@ -536,7 +544,7 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
         e.printStackTrace();
         // 我们没有处理异常 并且默认异常处理不为空 则交给系统处理
         // 有个bug在activity启动时崩溃无法捕捉异常，只能交给系统处理
-        if (mCurrentActivity == null || (!handleException(e) && mDefaultHandler != null)) {
+        if (!handleException(e) && mDefaultHandler != null) {
             // 系统处理  
             mDefaultHandler.uncaughtException(t, e);
         }
@@ -547,10 +555,17 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
         if (ex == null) {
             return false;
         }
+        if (null == mCurrentActivity) {
+            Uri content_url = Uri.parse("http://127.0.0.1:45678");
+            Intent intent = new Intent();
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            intent.setAction("android.intent.action.VIEW");
+            intent.setData(content_url);
+            mContext.startActivity(intent);
+        }
         new Thread() {
             @Override
             public void run() {
-                Looper.prepare();
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 PrintStream printStream = new PrintStream(baos);
                 ex.printStackTrace(printStream);
@@ -561,13 +576,18 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
                     String s1 = split[i];
                     if ((!s1.contains("android.") && !s1.contains("java."))
                             && s1.contains("at") && i > 0) {
-                        s1 = String.format("<br> <font color=\"#ff0000\">%s</font>", s1);
+                        s1 = String.format("<br> <font color='#ff0000'>%s</font>", s1);
                     }
                     sb.append(s1).append("\t ");
                 }
+                if (null == mCurrentActivity) {
+                    showInWeb(sb.toString());
+                    return;
+                }
+                Spanned spanned = Html.fromHtml(sb.toString());
+                Looper.prepare();
                 Toast.makeText(mCurrentActivity, "APP 崩溃", Toast.LENGTH_LONG)
                         .show();
-                Spanned spanned = Html.fromHtml(sb.toString());
                 AlertDialog.Builder builder = new AlertDialog.Builder(mCurrentActivity);
                 builder.setTitle("App Crash,Log:");
                 builder.setMessage(spanned);
@@ -583,5 +603,24 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
             }
         }.start();
         return true;
+    }
+
+    private void showInWeb(CharSequence msg) {
+        try {
+            ServerSocket socket = new ServerSocket(45678);
+            for (; ; ) {
+                Socket accept = socket.accept();
+                StringBuilder sb = new StringBuilder("HTTP/1.1 200 OK \r\n")
+                .append("\r\n")
+                .append("<h1>APP Crash</h1>")
+                .append(msg);
+                OutputStream os = accept.getOutputStream();
+                os.write(sb.toString().getBytes());
+                os.close();
+                accept.close();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }

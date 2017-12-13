@@ -22,6 +22,7 @@ public class TestActivity extends AppCompatActivity implements View.OnClickListe
     private void init() {
         Button button = (Button) findViewById(R.id.btn_print_Log);
         button.setOnClickListener(this);
+        throw new NumberFormatException("测试崩溃异常");
     }
 
     @Override
