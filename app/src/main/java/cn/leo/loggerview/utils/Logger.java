@@ -40,6 +40,7 @@ import android.widget.Toast;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PrintStream;
 import java.net.ServerSocket;
@@ -543,7 +544,6 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
         // 打印异常信息
         e.printStackTrace();
         // 我们没有处理异常 并且默认异常处理不为空 则交给系统处理
-        // 有个bug在activity启动时崩溃无法捕捉异常，只能交给系统处理
         if (!handleException(e) && mDefaultHandler != null) {
             // 系统处理  
             mDefaultHandler.uncaughtException(t, e);
@@ -558,7 +558,7 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
         if (null == mCurrentActivity) {
             Uri content_url = Uri.parse("http://127.0.0.1:45678");
             Intent intent = new Intent();
-            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            intent.setFlags(Intent.FLAG_ACTIVITY_TASK_ON_HOME);
             intent.setAction("android.intent.action.VIEW");
             intent.setData(content_url);
             mContext.startActivity(intent);
@@ -610,14 +610,22 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
             ServerSocket socket = new ServerSocket(45678);
             for (; ; ) {
                 Socket accept = socket.accept();
-                StringBuilder sb = new StringBuilder("HTTP/1.1 200 OK \r\n")
-                .append("\r\n")
-                .append("<h1>APP Crash</h1>")
-                .append(msg);
+                StringBuilder sb = new StringBuilder("HTTP/1.1 200 OK\n")
+                        .append("\n")
+                        .append("<head>")
+                        .append("<meta name='viewport' content='width=240, target-densityDpi=device-dpi'>")
+                        .append("</head>")
+                        .append("<html>")
+                        .append("<h1>APP Crash</h1>")
+                        .append(msg)
+                        .append("<br/>")
+                        .append("</html>");
                 OutputStream os = accept.getOutputStream();
                 os.write(sb.toString().getBytes());
+                os.flush();
                 os.close();
                 accept.close();
+                Process.killProcess(Process.myPid());
             }
         } catch (IOException e) {
             e.printStackTrace();
