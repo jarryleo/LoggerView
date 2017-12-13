@@ -32,14 +32,18 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         Button button = (Button) findViewById(R.id.btn_print_Log);
         button.setOnClickListener(this);
         findViewById(R.id.btn_next).setOnClickListener(this);
+        findViewById(R.id.btn_crash).setOnClickListener(this);
     }
 
     @Override
     public void onClick(View v) {
+        Intent intent = new Intent(this, TestActivity.class);
         if (v.getId() == R.id.btn_next) {
-            startActivity(new Intent(this, TestActivity.class));
-        }
-        if (v.getId() == R.id.btn_print_Log) {
+            startActivity(intent);
+        } else if (v.getId() == R.id.btn_crash) {
+            intent.putExtra("crash", true);
+            startActivity(intent);
+        } else if (v.getId() == R.id.btn_print_Log) {
             Logger.w("这是一条log日志，测试测试测试 这是一条log日志，测试测试测试" + mIndex++);
             Logger.v("这是一条log日志，测试测试测试 这是一条log日志，测试测试测试" + mIndex++);
             Logger.d("这是一条log日志，测试测试测试 这是一条log日志，测试测试测试" + mIndex++);

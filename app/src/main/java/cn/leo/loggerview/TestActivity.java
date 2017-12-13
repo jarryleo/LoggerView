@@ -22,7 +22,8 @@ public class TestActivity extends AppCompatActivity implements View.OnClickListe
     private void init() {
         Button button = (Button) findViewById(R.id.btn_print_Log);
         button.setOnClickListener(this);
-        throw new NumberFormatException("测试崩溃异常");
+        boolean crash = getIntent().getBooleanExtra("crash", false);
+        if (crash) throw new NumberFormatException("测试activity开启崩溃");
     }
 
     @Override
@@ -31,9 +32,9 @@ public class TestActivity extends AppCompatActivity implements View.OnClickListe
         new Thread() { //子线程弹吐司测试
             @Override
             public void run() {
-                ToastUtilK.INSTANCE.show(TestActivity.this, "测试");
+                ToastUtilK.INSTANCE.show(TestActivity.this, "崩溃测试");
             }
         }.start();
-        throw new NumberFormatException("测试崩溃异常");
+        throw new NumberFormatException("测试事件崩溃");
     }
 }
