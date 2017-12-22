@@ -11,7 +11,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
-import android.os.Process;
+import android.os.MessageQueue;
 import android.os.SystemClock;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
@@ -40,9 +40,12 @@ import android.widget.Toast;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PrintStream;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.text.SimpleDateFormat;
@@ -52,26 +55,25 @@ import java.util.List;
 
 /**
  * Created by Leo on 2017/8/21.
- * 在APP上唤起debug日志方法，点击事件，快速点击3下，然后慢速点击3下，关闭也是
+ * 在APP上唤起debug日志方法，点击事件，快速点击3下，然后慢速点击3下，再次快速点击3下(SOS的摩尔电码),关闭也是
  * 唤起log筛选器，在顶部200像素内，快速单击5下；
  */
 
 public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandler, Application.ActivityLifecycleCallbacks {
     private static boolean debuggable = true; //正式环境(false)不打印日志，也不能唤起app的debug界面
-    private static final int LOG_SOUT = 8;
     private static Logger me;
     private static String tag;
     private final Context mContext;
     private long timestamp = 0;
+    private View mSrcView;
     private int mLongClick;
     private int mShortClick;
     private int mFilterClick;
-    private View mSrcView;
     private Context mCurrentActivity;
     private AlertDialog mFilterDialog;
     private String mFilterText;
     private int mFilterLevel;
-    private final Toast mToast;
+    private static final int LOG_SOUT = 8;
     private static Thread.UncaughtExceptionHandler mDefaultHandler;
     private final LinearLayout mLogContainer;
     private List<String> mLogList = new ArrayList<>();
@@ -80,10 +82,19 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
     private final TextView mTvTitle;
     private final ListView mLvLog;
     private boolean mAutoScroll = true;
+    private static final int SHORT_CLICK = 3;
+    private static final int LONG_CLICK = 3;
 
-    public static Logger setTag(String tag) {
+    public static void setTag(String tag) {
         Logger.tag = tag;
-        return me;
+    }
+
+    @Target(ElementType.TYPE)
+    @Retention(RetentionPolicy.RUNTIME)
+    public @interface IgnoreLoggerView {
+        // 有些自定义view在解绑时会跟本工具冲突(onPause后view空白)
+        // 可以在activity上打上此注解忽略本工具View
+        // 当然忽略后不能在界面上唤起悬浮窗
     }
 
     private Logger(final Context context) {
@@ -91,7 +102,6 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
         mContext = context;
         tag = context.getApplicationInfo().packageName; //可以自定义
         final float v = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 4, getResources().getDisplayMetrics());
-        mToast = Toast.makeText(context, "", Toast.LENGTH_SHORT);
         //日志容器
         mLogContainer = new LinearLayout(context);
         mLogContainer.setOrientation(LinearLayout.VERTICAL);
@@ -110,7 +120,14 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
         mTvTitle.setOnClickListener(new OnClickListener() {
             @Override
             public void onClick(View v) {
-                showFilterDialog();
+                showFilterDialog(); //点击日志窗口标题栏打开过滤器
+            }
+        });
+        mTvTitle.setOnLongClickListener(new OnLongClickListener() {
+            @Override
+            public boolean onLongClick(View v) {
+                loggerSwitch();//长按日志窗口标题栏关闭日志窗口
+                return true;
             }
         });
         mLogContainer.addView(mTvTitle);
@@ -183,7 +200,14 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
                     application.registerActivityLifecycleCallbacks(me);
                     //获取系统默认异常处理器
                     mDefaultHandler = Thread.getDefaultUncaughtExceptionHandler();
-                    Thread.setDefaultUncaughtExceptionHandler(me);//线程异常处理设置为自己
+                    //线程空闲时设置异常处理，兼容其他框架异常处理能力
+                    Looper.myQueue().addIdleHandler(new MessageQueue.IdleHandler() {
+                        @Override
+                        public boolean queueIdle() {
+                            Thread.setDefaultUncaughtExceptionHandler(me);//线程异常处理设置为自己
+                            return false;
+                        }
+                    });
                 }
             }
         }
@@ -318,6 +342,7 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
     public void onActivityResumed(Activity activity) {
         mCurrentActivity = activity;
         if (debuggable) {
+            if (checkIgnore(activity)) return;
             ViewGroup decorView = (ViewGroup) activity.getWindow().getDecorView();
             mSrcView = decorView.getChildAt(0);
             decorView.removeView(mSrcView);
@@ -330,6 +355,7 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
     @Override
     public void onActivityPaused(Activity activity) {
         mCurrentActivity = null;
+        if (checkIgnore(activity)) return;
         ViewGroup decorView = (ViewGroup) activity.getWindow().getDecorView();
         me.removeView(mSrcView);
         me.removeView(mLogContainer);
@@ -337,6 +363,11 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
         if (mSrcView != null) {
             decorView.addView(mSrcView, 0);
         }
+    }
+
+    private boolean checkIgnore(Activity activity) {
+        Class<? extends Activity> a = activity.getClass();
+        return a.isAnnotationPresent(IgnoreLoggerView.class);
     }
 
     @Override
@@ -420,35 +451,29 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
     }
 
     private void checkSwitch(long dis) {
-        if (dis < 200 && mShortClick < 2) {
+        if (dis <= 200 && mShortClick < SHORT_CLICK * 2) {
             mShortClick++;
-            if (mShortClick == 2 && mLogContainer.getVisibility() == GONE) {
-                //mToast.setText("即将开启日志，请2秒内慢速点击3下开启日志窗口");
-                //mToast.show();
-            }
-        } else if (dis > 200 && dis < 2000 && mShortClick == 2) {
-            mLongClick++;
-            if (mLogContainer.getVisibility() == GONE) {
-                //mToast.setText("还差" + (3 - mLongClick) + "次点击开启日志");
-                //mToast.show();
-            }
-            if (mLongClick == 3 && mShortClick == 2) {
-                if (mLogContainer.getVisibility() == GONE) {
-                    mLogContainer.setVisibility(VISIBLE);
-                    //mToast.setText("顶部快速点击5下可以开启过滤器,重复开启指令即可关闭日志");
-                    //mToast.show();
-                } else {
-                    mLogContainer.setVisibility(GONE);
-                }
-                clearClick();
-            }
-        } else {
-            if (mShortClick >= 2 && mLogContainer.getVisibility() == GONE) {
-                //mToast.setText("开启指令失效，请重新快速点击3下");
-                //mToast.show();
-            }
-            clearClick();
+            if (mShortClick > SHORT_CLICK * 2) clearClick();
         }
+        if (dis > 200 && dis <= 2000 && mShortClick == SHORT_CLICK - 1) {
+            mLongClick++;
+            if (mLongClick > LONG_CLICK + 1) clearClick();
+        }
+        if (dis > 2000) clearClick();
+        if (mLongClick == LONG_CLICK + 1 && mShortClick == SHORT_CLICK * 2 - 2) {
+            loggerSwitch();
+        }
+        //i("s:" + mShortClick + "l:" + mLongClick);
+    }
+
+    //日志开关切换
+    private void loggerSwitch() {
+        if (mLogContainer.getVisibility() == GONE) {
+            mLogContainer.setVisibility(VISIBLE);
+        } else {
+            mLogContainer.setVisibility(GONE);
+        }
+        clearClick();
     }
 
     private void checkFilter(long dis, float y) {
@@ -545,15 +570,15 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
         // 打印异常信息
         e.printStackTrace();
         // 我们没有处理异常 并且默认异常处理不为空 则交给系统处理
-        if (!handleException(e) && mDefaultHandler != null) {
+        if (!handleException(t, e) && mDefaultHandler != null) {
             // 系统处理  
             mDefaultHandler.uncaughtException(t, e);
         }
     }
 
     /*自己处理崩溃事件*/
-    private boolean handleException(final Throwable ex) {
-        if (ex == null) {
+    private boolean handleException(final Thread t, final Throwable e) {
+        if (e == null) {
             return false;
         }
         if (null == mCurrentActivity) {
@@ -569,7 +594,7 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
             public void run() {
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 PrintStream printStream = new PrintStream(baos);
-                ex.printStackTrace(printStream);
+                e.printStackTrace(printStream);
                 String s = baos.toString();
                 String[] split = s.split("\t");
                 StringBuilder sb = new StringBuilder();
@@ -582,7 +607,7 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
                     sb.append(s1).append("\t ");
                 }
                 if (null == mCurrentActivity) {
-                    showInWeb(sb.toString());
+                    showInWeb(sb.toString(), t, e);
                     return;
                 }
                 Spanned spanned = Html.fromHtml(sb.toString());
@@ -595,7 +620,8 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
                 builder.setPositiveButton("关闭app", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
-                        Process.killProcess(Process.myPid());
+                        mDefaultHandler.uncaughtException(t, e);
+                        //Process.killProcess(Process.myPid());
                     }
                 });
                 builder.setCancelable(false);
@@ -606,7 +632,7 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
         return true;
     }
 
-    private void showInWeb(CharSequence msg) {
+    private void showInWeb(CharSequence msg, final Thread t, final Throwable ex) {
         try {
             ServerSocket socket = new ServerSocket(45678);
             for (; ; ) {
@@ -626,7 +652,8 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
                 os.flush();
                 os.close();
                 accept.close();
-                Process.killProcess(Process.myPid());
+                mDefaultHandler.uncaughtException(t, ex);
+                //Process.killProcess(Process.myPid());
             }
         } catch (IOException e) {
             e.printStackTrace();
