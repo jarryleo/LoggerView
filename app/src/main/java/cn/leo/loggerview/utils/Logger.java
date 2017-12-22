@@ -508,6 +508,9 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
         builder.setTitle("日志过滤器");
         builder.setView(initDialogView());
         builder.setCancelable(false);
+        if (mFilterDialog != null) {
+            mFilterDialog.dismiss();
+        }
         mFilterDialog = builder.show();
     }
 
