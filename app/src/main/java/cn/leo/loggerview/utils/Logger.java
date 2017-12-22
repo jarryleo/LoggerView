@@ -504,14 +504,11 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
 
     private void showFilterDialog() {
         if (mCurrentActivity == null) return;
-        if (mFilterDialog == null) {
-            AlertDialog.Builder builder = new AlertDialog.Builder(mCurrentActivity);
-            builder.setTitle("日志过滤器");
-            builder.setView(initDialogView());
-            builder.setCancelable(false);
-            mFilterDialog = builder.show();
-        } else
-            mFilterDialog.show();
+        AlertDialog.Builder builder = new AlertDialog.Builder(mCurrentActivity);
+        builder.setTitle("日志过滤器");
+        builder.setView(initDialogView());
+        builder.setCancelable(false);
+        mFilterDialog = builder.show();
     }
 
     @NonNull
