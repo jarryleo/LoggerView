@@ -6,6 +6,7 @@ import android.view.View;
 import android.widget.Button;
 
 import cn.leo.loggerview.utils.Logger;
+import cn.leo.loggerview.utils.TestUtil;
 import cn.leo.loggerview.utils.ToastUtilK;
 
 public class TestActivity extends AppCompatActivity implements View.OnClickListener {
@@ -24,6 +25,7 @@ public class TestActivity extends AppCompatActivity implements View.OnClickListe
         button.setOnClickListener(this);
         boolean crash = getIntent().getBooleanExtra("crash", false);
         if (crash) throw new NumberFormatException("测试activity开启崩溃");
+        TestUtil.testLeak(this);
     }
 
     @Override

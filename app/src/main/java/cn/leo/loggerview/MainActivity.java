@@ -43,6 +43,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         } else if (v.getId() == R.id.btn_crash) {
             intent.putExtra("crash", true);
             startActivity(intent);
+            //System.gc();
         } else if (v.getId() == R.id.btn_print_Log) {
             Logger.w("这是一条log日志，测试测试测试 这是一条log日志，测试测试测试" + mIndex++);
             Logger.v("这是一条log日志，测试测试测试 这是一条log日志，测试测试测试" + mIndex++);

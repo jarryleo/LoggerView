@@ -46,12 +46,16 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
+import java.lang.ref.ReferenceQueue;
+import java.lang.ref.WeakReference;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.util.WeakHashMap;
 
 /**
  * Created by Leo on 2017/8/21.
@@ -185,7 +189,30 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
                 builder.show();
             }
         });
+
+        //检测内存泄漏相关
+        mLeakCheck = new LeakCheck();
+        Handler handler = new Handler(Looper.getMainLooper());
+        handler.postDelayed(mRunnable, 10000);
     }
+
+    //activity内存泄漏检测
+    private LeakCheck mLeakCheck;
+    private Runnable mRunnable = new Runnable() {
+        @Override
+        public void run() {
+            handler.removeCallbacks(this);
+            handler.postDelayed(this, 10000); //10秒检测一次
+            String s = null;
+            try {
+                s = mLeakCheck.checkLeak();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            if (TextUtils.isEmpty(s)) return;
+            //Toast.makeText(mContext, "发生内存泄漏:" + s, Toast.LENGTH_SHORT).show();
+        }
+    };
 
     /**
      * 在application 的 onCreate() 方法初始化
@@ -330,7 +357,7 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
 
     @Override
     public void onActivityCreated(Activity activity, Bundle savedInstanceState) {
-
+        mLeakCheck.add(activity);
     }
 
     @Override
@@ -382,7 +409,7 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
 
     @Override
     public void onActivityDestroyed(Activity activity) {
-
+        mLeakCheck.remove(activity);
     }
 
     final ViewDragHelper dragHelper = ViewDragHelper.create(this, new ViewDragHelper.Callback() {
@@ -660,6 +687,41 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
             }
         } catch (IOException e) {
             e.printStackTrace();
+        }
+    }
+
+    private class LeakCheck {
+        List<Integer> mList = Collections.synchronizedList(new ArrayList<Integer>());
+        WeakHashMap<Activity, Integer> mMap = new WeakHashMap<>();
+        ReferenceQueue mQueue = new ReferenceQueue();
+        WeakReference mPhantomReference = new WeakReference(new Object(), mQueue);
+
+        public void add(Activity activity) {
+            int code = activity.hashCode();
+            mList.add(code);
+            mMap.put(activity, code);
+        }
+
+        public void remove(Activity activity) {
+            mList.remove(Integer.valueOf(activity.hashCode()));
+        }
+
+        public String checkLeak() throws InterruptedException {
+            if (!mPhantomReference.isEnqueued()) return null;
+            e("检测到GC");
+            e("理论存活activity数：" + mList.size());
+            StringBuilder stringBuilder = new StringBuilder();
+            for (Activity activity : mMap.keySet()) {
+                int s = activity.hashCode();
+                String name = activity.getClass().getName();
+                if (!mList.contains(s)) {
+                    stringBuilder.append(name).append(";");
+                    e(name + " 可能发生内存泄漏,请检查");
+                }
+            }
+            mQueue.remove();
+            mPhantomReference = new WeakReference(new Object(), mQueue);
+            return stringBuilder.toString();
         }
     }
 }
