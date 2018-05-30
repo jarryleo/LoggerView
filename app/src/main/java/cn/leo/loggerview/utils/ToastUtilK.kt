@@ -1,4 +1,4 @@
-package cn.leo.loggerview.utils
+package cn.leo.localnet.utils
 
 import android.content.Context
 import android.os.Handler
@@ -11,12 +11,18 @@ import android.widget.Toast
 object ToastUtilK {
     private var handler: Handler = Handler(Looper.getMainLooper())
     private var mToast: Toast? = null
-    fun show(context: Context, text: String) {
-        if (Looper.myLooper() != Looper.getMainLooper()) handler.post { show(context, text) }
+    fun show(context: Context, text: String, duration: Int = Toast.LENGTH_SHORT) {
+        if (Looper.myLooper() != Looper.getMainLooper()) handler.post { show(context, text, duration) }
         else {
-            mToast = mToast ?: Toast.makeText(context.applicationContext, text, Toast.LENGTH_SHORT)
+            mToast = mToast ?: Toast.makeText(context.applicationContext, text, duration)
             mToast?.setText(text)
             mToast?.show()
         }
     }
 }
+
+fun Context.toast(text: String, duration: Int = Toast.LENGTH_SHORT) {
+    ToastUtilK.show(this, text, duration)
+}
+
+

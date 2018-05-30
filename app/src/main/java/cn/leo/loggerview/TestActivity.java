@@ -4,10 +4,12 @@ import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.view.View;
 import android.widget.Button;
+import android.widget.Toast;
 
 import cn.leo.loggerview.utils.Logger;
 import cn.leo.loggerview.utils.TestUtil;
-import cn.leo.loggerview.utils.ToastUtilK;
+
+import static cn.leo.localnet.utils.ToastUtilKKt.toast;
 
 public class TestActivity extends AppCompatActivity implements View.OnClickListener {
 
@@ -34,7 +36,7 @@ public class TestActivity extends AppCompatActivity implements View.OnClickListe
         new Thread() { //子线程弹吐司测试
             @Override
             public void run() {
-                ToastUtilK.INSTANCE.show(TestActivity.this, "崩溃测试");
+                toast(TestActivity.this, "崩溃测试", Toast.LENGTH_SHORT);
             }
         }.start();
         throw new NumberFormatException("测试事件崩溃");

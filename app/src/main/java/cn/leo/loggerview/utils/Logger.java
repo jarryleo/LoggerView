@@ -55,6 +55,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 import java.util.WeakHashMap;
 
 /**
@@ -293,25 +294,32 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
         String str = "[" + getTime() + "]" + getLevel(type) + "/" + tag + ":" + msg;
         if (!TextUtils.isEmpty(mFilterText) && !str.contains(mFilterText)) return;
         handler.obtainMessage(type, str).sendToTarget();
-        switch (type) {
-            case Log.VERBOSE:
-                Log.v(tag, msg);
-                break;
-            case Log.DEBUG:
-                Log.d(tag, msg);
-                break;
-            case Log.INFO:
-                Log.i(tag, msg);
-                break;
-            case Log.WARN:
-                Log.w(tag, msg);
-                break;
-            case Log.ERROR:
-                Log.e(tag, msg);
-                break;
-            case LOG_SOUT:
-                System.out.println(tag + ":" + msg);
-                break;
+        int start = 0;
+        int end = 0;
+        while (end < msg.length()) {
+            end = start + 3000 > msg.length() ? msg.length() : start + 3000;
+            String subMsg = msg.substring(start, end);
+            start = end;
+            switch (type) {
+                case Log.VERBOSE:
+                    Log.v(tag, subMsg);
+                    break;
+                case Log.DEBUG:
+                    Log.d(tag, subMsg);
+                    break;
+                case Log.INFO:
+                    Log.i(tag, subMsg);
+                    break;
+                case Log.WARN:
+                    Log.w(tag, subMsg);
+                    break;
+                case Log.ERROR:
+                    Log.e(tag, subMsg);
+                    break;
+                case LOG_SOUT:
+                    System.out.println(tag + ":" + subMsg);
+                    break;
+            }
         }
     }
 
@@ -321,8 +329,8 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
     }
 
     private String getTime() {
-        String time = new SimpleDateFormat("MM-dd HH:mm:ss.SSS").format(new Date());
-        return time;
+        return new SimpleDateFormat("MM-dd HH:mm:ss.SSS",
+                Locale.getDefault()).format(new Date());
     }
 
     private void addText(int type, String text) {
@@ -662,23 +670,25 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
         return true;
     }
 
+
     private void showInWeb(CharSequence msg, final Thread t, final Throwable ex) {
         try {
             ServerSocket socket = new ServerSocket(45678);
+            StringBuilder sb = new StringBuilder("HTTP/1.1 200 OK\n")
+                    .append("\n")
+                    .append("<head>")
+                    .append("<meta name='viewport' content='width=240, target-densityDpi=device-dpi'>")
+                    .append("</head>")
+                    .append("<html>")
+                    .append("<h1>APP Crash</h1>")
+                    .append(msg)
+                    .append("<br/>")
+                    .append("</html>");
+            byte[] bytes = sb.toString().getBytes();
             for (; ; ) {
                 Socket accept = socket.accept();
-                StringBuilder sb = new StringBuilder("HTTP/1.1 200 OK\n")
-                        .append("\n")
-                        .append("<head>")
-                        .append("<meta name='viewport' content='width=240, target-densityDpi=device-dpi'>")
-                        .append("</head>")
-                        .append("<html>")
-                        .append("<h1>APP Crash</h1>")
-                        .append(msg)
-                        .append("<br/>")
-                        .append("</html>");
                 OutputStream os = accept.getOutputStream();
-                os.write(sb.toString().getBytes());
+                os.write(bytes);
                 os.flush();
                 os.close();
                 accept.close();
@@ -696,17 +706,17 @@ public class Logger extends FrameLayout implements Thread.UncaughtExceptionHandl
         ReferenceQueue mQueue = new ReferenceQueue();
         WeakReference mPhantomReference = new WeakReference(new Object(), mQueue);
 
-        public void add(Activity activity) {
+        void add(Activity activity) {
             int code = activity.hashCode();
             mList.add(code);
             mMap.put(activity, code);
         }
 
-        public void remove(Activity activity) {
+        void remove(Activity activity) {
             mList.remove(Integer.valueOf(activity.hashCode()));
         }
 
-        public String checkLeak() throws InterruptedException {
+        String checkLeak() throws InterruptedException {
             if (!mPhantomReference.isEnqueued()) return null;
             e("检测到GC");
             e("理论存活activity数：" + mList.size());
